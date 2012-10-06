@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script type="text/javascript"
+      src="http://maps.googleapis.com/maps/api/js?key=AIzaSyC_NMVGTQVlJaOjD3NF-Ls_QOqHI5rhLlc&sensor=false">
+    </script>
+    <script type="text/javascript" src="jquery.js">
+    </script>
+    <style type="text/css">
+      html { height: 100% }
+      body { height: 100%; margin: 0; padding: 0 }
+      #map_canvas { height: 80% }
+    </style>
+  </head>
+  <body>
+    <div id="top">
+      Total number of records: <span id="records_total">(loading)</span>
+      <form id="geosearch">
+	Search within <input type="text" name="miles" value="0.1" /> miles
+	of (<input type="text" name="lat" value="40.7510" /> (lat) ,
+	<input type="text" name="lng" value="-73.9935" /> (lng))
+	Page # <input type="text" name="page" value="1" /> 
+	<input type="submit" />
+      </form>
+    </div>
+    <div id="map_canvas" style="width: 100%; height: 100%"></div>
+
+    <script type="text/javascript">
+      var mapOptions = {
+        center: new google.maps.LatLng(40.7510, -73.9935),
+        zoom: 13,
+        mapTypeId: google.maps.MapTypeId.ROADMAP
+      };
+
+      var map = new google.maps.Map(document.getElementById("map_canvas"), mapOptions);
+      var markersArray = [];
+      function clearOverlays() {
+        for (var i = 0; i < markersArray.length; i++ ) {
+          markersArray[i].setMap(null);
+        }
+        markersArray = [];
+      }
+      var infowindow = new google.maps.InfoWindow();
+
+      function get_data(filters, includeResults, page, callback) {
+        url = "/";
+        $.each(filters, function(i, n) {
+          url = url + i + "/" + n + "/";
+        });
+        url = "http://halcyon.boldprogressives.org:8000/v1" + url;
+        if( includeResults ) {
+          url += "?results";
+          if( page ) {
+            url += "&page=" + page;
+          }
+        }
+console.log(url);
+        $.ajax({
+          type: 'GET',
+          url: url,
+          async: false,
+          jsonp: "callback",
+          contentType: "application/json",
+          dataType: 'jsonp',
+          success: function(json) { 
+            console.dir(json);
+            callback(json);
+          },
+          error: function(e) {
+            console && console.log(e.message);
+          }
+        });
+      };
+
+      // Load the basic information
+      get_data({}, false, false, function(json) { 
+        $("#records_total").text(json.records);
+      });
+
+      function load_records(json) {
+        clearOverlays();
+        var results = json.results;
+        $.each(results, function(i, n) {
+          if( !n.loc ) return;
+          var marker = new google.maps.Marker({
+            position: new google.maps.LatLng(n.loc[1], n.loc[0]),
+            map: map,
+            title: n.address
+          });
+          google.maps.event.addListener(marker, 'click', function() {
+            infowindow.content = JSON.stringify(n);
+            infowindow.open(map, marker);
+          });
+          markersArray.push(marker);
+        });
+      };
+
+      // Load some records
+      get_data({}, true, 0, load_records);
+
+      // Wire up geosearch			   
+      $("#geosearch").submit(function() {
+        var lat = $("#geosearch [name=lat]").val();
+        var lng = $("#geosearch [name=lng]").val();
+        var miles = $("#geosearch [name=miles]").val();
+        var page = $("#geosearch [name=page]").val();
+        get_data({"loc": "$near=" + lng + ":" + lat + ":" + miles}, true, 0, load_records);
+        return false;
+      });			    
+    </script>
+  </body>
+</html>
